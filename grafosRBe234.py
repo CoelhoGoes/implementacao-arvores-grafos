@@ -6,10 +6,9 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import random
 
 # ==========================================================
-# ===== LÓGICA DAS ÁRVORES (MANTIDA DO CÓDIGO ANTERIOR) =====
+# ===== 1. ÁRVORE BINÁRIA RUBRO-NEGRA (RED-BLACK TREE) =====
 # ==========================================================
 
-# --- 1. RUBRO-NEGRA ---
 RED = True
 BLACK = False
 
@@ -28,6 +27,7 @@ class RedBlackTree:
         self.TNULL.right = None
         self.root = self.TNULL
 
+    # --- Busca ---
     def search(self, k):
         return self._search_helper(self.root, k)
 
@@ -38,6 +38,7 @@ class RedBlackTree:
             return self._search_helper(node.left, key)
         return self._search_helper(node.right, key)
 
+    # --- Rotações ---
     def left_rotate(self, x):
         y = x.right
         x.right = y.left
@@ -68,8 +69,8 @@ class RedBlackTree:
         y.right = x
         x.parent = y
 
+    # --- Inserção ---
     def insert(self, key):
-        # Verifica duplicata antes de inserir
         if self.search(key) != self.TNULL:
             return False # Duplicado
 
@@ -144,6 +145,7 @@ class RedBlackTree:
                 break
         self.root.color = BLACK
 
+    # --- Remoção ---
     def transplant(self, u, v):
         if u.parent is None:
             self.root = v
@@ -249,7 +251,10 @@ class RedBlackTree:
                     x = self.root
         x.color = BLACK
 
-# --- 2. ÁRVORE 2-3-4 ---
+# ==========================================================
+# ===== 2. ÁRVORE NÃO-BINÁRIA 2-3-4 (B-TREE ORDER 4) =====
+# ==========================================================
+
 class Node234:
     def __init__(self, is_leaf=False):
         self.keys = [] 
@@ -260,6 +265,7 @@ class Tree234:
     def __init__(self):
         self.root = Node234(is_leaf=True)
 
+    # --- Busca ---
     def search(self, key):
         return self._search_helper(self.root, key)
 
@@ -274,23 +280,27 @@ class Tree234:
         else:
             return self._search_helper(node.children[i], key)
 
+    # --- Inserção ---
     def split_child(self, parent, index):
         node_to_split = parent.children[index]
         new_node = Node234(is_leaf=node_to_split.is_leaf)
         mid_key = node_to_split.keys[1]
+        
         new_node.keys.append(node_to_split.keys[2])
+        
         if not node_to_split.is_leaf:
             new_node.children.append(node_to_split.children[2])
             new_node.children.append(node_to_split.children[3])
             node_to_split.children = node_to_split.children[:2]
+            
         node_to_split.keys = node_to_split.keys[:1]
+        
         parent.children.insert(index + 1, new_node)
         parent.keys.insert(index, mid_key)
 
     def insert(self, key):
-        # Verifica duplicata
         if self.search(key) is not None:
-            return False
+            return False # Duplicado
 
         root = self.root
         if len(root.keys) == 3:
@@ -321,14 +331,118 @@ class Tree234:
                     i += 1 
             self._insert_non_full(node.children[i], key)
 
+    # --- Remoção Completa (B-Tree Logic) ---
     def delete(self, key):
-        # Implementação visual simulada pois a lógica completa de delete em B-Tree é muito extensa
-        # Se você tiver a lógica, substitua aqui.
-        print("Delete na 2-3-4 não totalmente implementado na lógica interna.")
-        return False
+        if self.search(key) is None:
+            return False # Chave não existe
+        
+        self._delete_recursive(self.root, key)
+
+        # Se a raiz ficar vazia após exclusões e não for folha, reduz a altura
+        if len(self.root.keys) == 0 and not self.root.is_leaf:
+            self.root = self.root.children[0]
+        
+        return True
+
+    def _delete_recursive(self, node, key):
+        idx = 0
+        while idx < len(node.keys) and key > node.keys[idx]:
+            idx += 1
+        
+        # CASO 1: A chave está neste nó
+        if idx < len(node.keys) and node.keys[idx] == key:
+            if node.is_leaf:
+                node.keys.pop(idx)
+            else:
+                # Nó interno: substitui pelo predecessor ou sucessor
+                child_left = node.children[idx]
+                child_right = node.children[idx+1]
+                
+                if len(child_left.keys) >= 2:
+                    pred = self._get_predecessor(child_left)
+                    node.keys[idx] = pred
+                    self._delete_recursive(child_left, pred)
+                elif len(child_right.keys) >= 2:
+                    succ = self._get_successor(child_right)
+                    node.keys[idx] = succ
+                    self._delete_recursive(child_right, succ)
+                else:
+                    # Merge (fusão)
+                    self._merge(node, idx)
+                    self._delete_recursive(child_left, key)
+        
+        # CASO 2: A chave não está neste nó
+        else:
+            if node.is_leaf:
+                return 
+            
+            child = node.children[idx]
+            if len(child.keys) < 2:
+                self._fill_child(node, idx)
+                if idx > len(node.keys):
+                    idx = len(node.keys)
+                    
+            if idx < len(node.keys) and key > node.keys[idx]:
+                idx += 1
+            
+            self._delete_recursive(node.children[idx], key)
+
+    def _get_predecessor(self, node):
+        curr = node
+        while not curr.is_leaf:
+            curr = curr.children[-1]
+        return curr.keys[-1]
+
+    def _get_successor(self, node):
+        curr = node
+        while not curr.is_leaf:
+            curr = curr.children[0]
+        return curr.keys[0]
+
+    def _fill_child(self, parent, idx):
+        if idx != 0 and len(parent.children[idx-1].keys) >= 2:
+            self._borrow_from_prev(parent, idx)
+        elif idx != len(parent.keys) and len(parent.children[idx+1].keys) >= 2:
+            self._borrow_from_next(parent, idx)
+        else:
+            if idx != len(parent.keys):
+                self._merge(parent, idx)
+            else:
+                self._merge(parent, idx-1)
+
+    def _borrow_from_prev(self, parent, idx):
+        child = parent.children[idx]
+        sibling = parent.children[idx-1]
+        
+        child.keys.insert(0, parent.keys[idx-1])
+        parent.keys[idx-1] = sibling.keys.pop()
+        
+        if not child.is_leaf:
+            child.children.insert(0, sibling.children.pop())
+            
+    def _borrow_from_next(self, parent, idx):
+        child = parent.children[idx]
+        sibling = parent.children[idx+1]
+        
+        child.keys.append(parent.keys[idx])
+        parent.keys[idx] = sibling.keys.pop(0)
+        
+        if not child.is_leaf:
+            child.children.append(sibling.children.pop(0))
+
+    def _merge(self, parent, idx):
+        child = parent.children[idx]
+        sibling = parent.children[idx+1]
+        
+        child.keys.append(parent.keys.pop(idx))
+        child.keys.extend(sibling.keys)
+        if not child.is_leaf:
+            child.children.extend(sibling.children)
+            
+        parent.children.pop(idx+1)
 
 # ==========================================================
-# ===== INTERFACE GRÁFICA (GUI) COM TKINTER =====
+# ===== 3. INTERFACE GRÁFICA (GUI) =====
 # ==========================================================
 
 class TreeApp:
@@ -337,25 +451,19 @@ class TreeApp:
         self.root.title("Visualizador de Árvores - Projeto de Grafos")
         self.root.geometry("1200x700")
         
-        # Configuração de Estilo
         style = ttk.Style()
-        style.theme_use('clam') # Aparência mais limpa
+        style.theme_use('clam')
         
-        # --- Lógica ---
         self.rb_tree = RedBlackTree()
         self.tree_234 = Tree234()
-        self.current_tree_type = "RB" # ou "234"
+        self.current_tree_type = "RB" 
 
-        # --- Layout Principal ---
-        # Esquerda: Controles | Direita: Visualização
         main_frame = ttk.Frame(root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Painel Esquerdo (Controles)
         left_panel = ttk.Frame(main_frame, width=300)
         left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         
-        # Painel Direito (Canvas do Matplotlib)
         right_panel = ttk.Frame(main_frame)
         right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
@@ -363,7 +471,6 @@ class TreeApp:
         self.setup_canvas(right_panel)
 
     def setup_controls(self, parent):
-        # 1. Seletor de Árvore
         lbl_tipo = ttk.Label(parent, text="Selecione a Árvore:", font=("Arial", 12, "bold"))
         lbl_tipo.pack(pady=(0, 5), anchor="w")
         
@@ -377,18 +484,15 @@ class TreeApp:
 
         ttk.Separator(parent, orient='horizontal').pack(fill='x', pady=15)
 
-        # 2. Operações
         lbl_ops = ttk.Label(parent, text="Operações:", font=("Arial", 12, "bold"))
         lbl_ops.pack(pady=(0, 5), anchor="w")
 
-        # Entrada de Valor
         frame_entry = ttk.Frame(parent)
         frame_entry.pack(fill='x', pady=5)
         ttk.Label(frame_entry, text="Valor:").pack(side=tk.LEFT)
         self.entry_val = ttk.Entry(frame_entry)
         self.entry_val.pack(side=tk.LEFT, fill='x', expand=True, padx=5)
 
-        # Botões
         btn_insert = ttk.Button(parent, text="Inserir", command=self.action_insert)
         btn_insert.pack(fill='x', pady=2)
         
@@ -400,30 +504,25 @@ class TreeApp:
 
         ttk.Separator(parent, orient='horizontal').pack(fill='x', pady=15)
 
-        # 3. Carga Inicial
         lbl_extra = ttk.Label(parent, text="Atalhos:", font=("Arial", 12, "bold"))
         lbl_extra.pack(pady=(0, 5), anchor="w")
         
         btn_populate = ttk.Button(parent, text="Gerar 21 Nós (Carga Inicial)", command=self.action_populate)
         btn_populate.pack(fill='x', pady=5)
 
-        # 4. Log / Console
         ttk.Label(parent, text="Log de Execução:", font=("Arial", 10, "bold")).pack(pady=(20, 0), anchor="w")
         self.log_box = tk.Text(parent, height=15, width=30, state='disabled', bg="#f0f0f0", font=("Consolas", 9))
         self.log_box.pack(fill='both', expand=True, pady=5)
 
     def setup_canvas(self, parent):
-        # Cria a figura do Matplotlib
         self.fig = plt.Figure(figsize=(5, 5), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.ax.axis('off')
 
-        # Integra com Tkinter
         self.canvas = FigureCanvasTkAgg(self.fig, master=parent)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-    # --- Funções de Ação ---
     def log(self, message):
         self.log_box.config(state='normal')
         self.log_box.insert(tk.END, f"> {message}\n")
@@ -444,7 +543,6 @@ class TreeApp:
         self.update_plot()
 
     def action_populate(self):
-        # Lista com 21 valores
         vals = [10, 20, 30, 15, 25, 5, 1, 50, 40, 60, 70, 65, 80, 90, 100, 12, 45, 55, 35, 6, 8]
         tree = self.rb_tree if self.current_tree_type == "RB" else self.tree_234
         
@@ -472,14 +570,15 @@ class TreeApp:
         val = self.get_value()
         if val is None: return
         
-        if self.current_tree_type == "RB":
-            if self.rb_tree.delete(val):
-                self.log(f"Removido: {val}")
-                self.update_plot()
-            else:
-                self.log(f"Erro: {val} não encontrado.")
+        tree = self.rb_tree if self.current_tree_type == "RB" else self.tree_234
+        
+        if tree.delete(val):
+            self.log(f"Removido: {val}")
+            self.update_plot()
+            messagebox.showinfo("Sucesso", f"O valor {val} foi removido e a árvore foi rebalanceada.")
         else:
-            self.log("A remoção visual da 2-3-4 ainda não foi implementada.")
+            self.log(f"Erro: {val} não encontrado.")
+            messagebox.showwarning("Erro", f"O valor {val} não foi encontrado na árvore.")
 
     def action_search(self):
         val = self.get_value()
@@ -501,7 +600,6 @@ class TreeApp:
             else:
                 self.log(f"Não encontrado: {val}")
 
-    # --- Motor de Visualização ---
     def update_plot(self):
         self.ax.clear()
         self.ax.axis('off')
@@ -534,18 +632,15 @@ class TreeApp:
 
         add_edges(root)
         
-        # Se só tiver a raiz
         if len(G.nodes) == 0:
             G.add_node(root.data)
 
-        # Layout
         try:
             from networkx.drawing.nx_agraph import graphviz_layout
             pos = graphviz_layout(G, prog='dot')
         except:
             pos = self.hierarchy_pos(G, root.data)
 
-        # Cores
         colors = []
         for n_val in G.nodes():
             node_obj = self.rb_tree.search(n_val)
@@ -579,7 +674,6 @@ class TreeApp:
 
         traverse(root)
         
-        # Layout hierárquico
         pos = self.hierarchy_pos(G, id(root))
 
         nx.draw(G, pos, ax=self.ax, labels=labels, with_labels=True, 
@@ -587,7 +681,6 @@ class TreeApp:
                 font_size=8, font_weight='bold')
         self.ax.set_title("Visualização Árvore 2-3-4", fontsize=14)
 
-    # Função auxiliar para layout bonito sem precisar instalar Graphviz
     def hierarchy_pos(self, G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
         pos = self._hierarchy_pos_impl(G, root, width, vert_gap, vert_loc, xcenter)
         return pos
@@ -612,7 +705,5 @@ class TreeApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # Tenta configurar ícone se existir, senão ignora
-    # root.iconbitmap("arvore.ico") 
     app = TreeApp(root)
     root.mainloop()

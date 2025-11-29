@@ -1,15 +1,19 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import random
 
 # ==========================================================
-# ===== 1. ÁRVORE BINÁRIA RUBRO-NEGRA (RED-BLACK TREE) =====
+# ===== LÓGICA DAS ÁRVORES (MANTIDA DO CÓDIGO ANTERIOR) =====
 # ==========================================================
 
-# --- Definições de Cores e Classe de Nó BINÁRIO ---
+# --- 1. RUBRO-NEGRA ---
 RED = True
 BLACK = False
 
-class Node:
+class NodeRB:
     def __init__(self, data, color=RED):
         self.data = data
         self.color = color
@@ -19,13 +23,11 @@ class Node:
 
 class RedBlackTree:
     def __init__(self):
-        # O TNULL é o nó sentinela (folhas pretas virtuais)
-        self.TNULL = Node(0, color=BLACK)
+        self.TNULL = NodeRB(0, color=BLACK)
         self.TNULL.left = None
         self.TNULL.right = None
         self.root = self.TNULL
 
-    # --- Operação 1: Busca ---
     def search(self, k):
         return self._search_helper(self.root, k)
 
@@ -36,7 +38,6 @@ class RedBlackTree:
             return self._search_helper(node.left, key)
         return self._search_helper(node.right, key)
 
-    # --- Auxiliares de Rotação ---
     def left_rotate(self, x):
         y = x.right
         x.right = y.left
@@ -67,9 +68,12 @@ class RedBlackTree:
         y.right = x
         x.parent = y
 
-    # --- Operação 2: Inserção ---
     def insert(self, key):
-        node = Node(key)
+        # Verifica duplicata antes de inserir
+        if self.search(key) != self.TNULL:
+            return False # Duplicado
+
+        node = NodeRB(key)
         node.parent = None
         node.data = key
         node.left = self.TNULL
@@ -86,7 +90,7 @@ class RedBlackTree:
             elif node.data > x.data:
                 x = x.right
             else:
-                return 
+                return False
 
         node.parent = y
         if y is None:
@@ -98,12 +102,13 @@ class RedBlackTree:
 
         if node.parent is None:
             node.color = BLACK
-            return
+            return True
 
         if node.parent.parent is None:
-            return
+            return True
 
         self.insert_fix(node)
+        return True
 
     def insert_fix(self, k):
         while k.parent.color == RED:
@@ -139,7 +144,6 @@ class RedBlackTree:
                 break
         self.root.color = BLACK
 
-    # --- Operação 3: Exclusão ---
     def transplant(self, u, v):
         if u.parent is None:
             self.root = v
@@ -167,8 +171,7 @@ class RedBlackTree:
                 node = node.left
 
         if z == self.TNULL:
-            print(f"Chave {key} não encontrada para exclusão.")
-            return
+            return False # Não encontrado
 
         y = z
         y_original_color = y.color
@@ -196,6 +199,7 @@ class RedBlackTree:
 
         if y_original_color == BLACK:
             self.delete_fix(x)
+        return True
 
     def delete_fix(self, x):
         while x != self.root and x.color == BLACK:
@@ -245,46 +249,8 @@ class RedBlackTree:
                     x = self.root
         x.color = BLACK
 
-    # --- Plotagem Gráfica (RB) ---
-    def visualize(self):
-        G = nx.DiGraph()
-        if self.root == self.TNULL: 
-            print("Árvore vazia.")
-            return
-        
-        def build_graph(node):
-            if node != self.TNULL:
-                if node.left != self.TNULL:
-                    G.add_edge(node.data, node.left.data)
-                    build_graph(node.left)
-                if node.right != self.TNULL:
-                    G.add_edge(node.data, node.right.data)
-                    build_graph(node.right)
-                    
-        build_graph(self.root)
-        
-        try:
-            from networkx.drawing.nx_agraph import graphviz_layout
-            pos = graphviz_layout(G, prog='dot')
-        except:
-            pos = nx.spring_layout(G)
-
-        final_colors = []
-        for n in G.nodes():
-            node_obj = self.search(n)
-            final_colors.append('red' if node_obj.color == RED else 'black')
-
-        plt.figure(figsize=(10, 6))
-        nx.draw(G, pos, with_labels=True, node_color=final_colors, font_color='white', node_size=600, font_weight='bold')
-        plt.title("Visualização da Árvore Rubro-Negra")
-        plt.show()
-
-# ==========================================================
-# ===== 2. ÁRVORE NÃO-BINÁRIA 2-3-4 (B-TREE ORDER 4) =====
-# ==========================================================
-
+# --- 2. ÁRVORE 2-3-4 ---
 class Node234:
-    """Nó para a Árvore 2-3-4, capaz de armazenar 1, 2 ou 3 chaves e até 4 filhos."""
     def __init__(self, is_leaf=False):
         self.keys = [] 
         self.children = []
@@ -294,7 +260,6 @@ class Tree234:
     def __init__(self):
         self.root = Node234(is_leaf=True)
 
-    # --- Operação 1: Busca ---
     def search(self, key):
         return self._search_helper(self.root, key)
 
@@ -302,44 +267,32 @@ class Tree234:
         i = 0
         while i < len(node.keys) and key > node.keys[i]:
             i += 1
-        
         if i < len(node.keys) and key == node.keys[i]:
             return (node, i)
-        
         elif node.is_leaf:
             return None
-        
         else:
             return self._search_helper(node.children[i], key)
 
-    # --- Auxiliar de Inserção: Split Preventivo ---
     def split_child(self, parent, index):
         node_to_split = parent.children[index]
         new_node = Node234(is_leaf=node_to_split.is_leaf)
-
-        # O índice 1 é a chave do meio (0, 1, 2)
         mid_key = node_to_split.keys[1]
-        
-        # A nova folha recebe a chave superior (índice 2)
         new_node.keys.append(node_to_split.keys[2])
-
-        # Se não for folha, move os filhos correspondentes
         if not node_to_split.is_leaf:
             new_node.children.append(node_to_split.children[2])
             new_node.children.append(node_to_split.children[3])
             node_to_split.children = node_to_split.children[:2]
-
-        # O nó original fica apenas com a chave inferior (índice 0)
         node_to_split.keys = node_to_split.keys[:1]
-
-        # Insere o novo nó e sobe a chave média para o pai
         parent.children.insert(index + 1, new_node)
         parent.keys.insert(index, mid_key)
 
-    # --- Operação 2: Inserção com Balanceamento ---
     def insert(self, key):
+        # Verifica duplicata
+        if self.search(key) is not None:
+            return False
+
         root = self.root
-        
         if len(root.keys) == 3:
             new_root = Node234(is_leaf=False)
             new_root.children.append(self.root)
@@ -348,172 +301,318 @@ class Tree234:
             self._insert_non_full(new_root, key)
         else:
             self._insert_non_full(root, key)
+        return True
 
     def _insert_non_full(self, node, key):
         i = len(node.keys) - 1
-        
         if node.is_leaf:
-            # CORREÇÃO: Verifica duplicata na folha
-            if key in node.keys: 
-                print(f"Chave {key} já existe (ignorado).")
-                return 
-            
             node.keys.append(None) 
             while i >= 0 and key < node.keys[i]:
                 node.keys[i+1] = node.keys[i]
                 i -= 1
             node.keys[i+1] = key
-        
         else:
             while i >= 0 and key < node.keys[i]:
                 i -= 1
-            
-            # CORREÇÃO CRÍTICA: Verifica se a chave JÁ existe neste nó interno
-            # (i parou na posição onde key >= node.keys[i])
-            if i >= 0 and node.keys[i] == key:
-                print(f"Chave {key} já existe em nó interno (ignorado).")
-                return
-
             i += 1
-            
             if len(node.children[i].keys) == 3:
                 self.split_child(node, i)
                 if key > node.keys[i]:
                     i += 1 
-                # Verifica duplicata novamente após o split, caso o mid_key seja igual
-                if key == node.keys[i-1 if i>0 else 0]: # verificação de segurança simples
-                     if key in node.keys: return 
-
             self._insert_non_full(node.children[i], key)
-            
-    # --- Operação 3: Exclusão (Simplificada para brevidade, mantida a original) ---
-    def delete(self, key):
-        # ... (Mantido seu código original de delete aqui, sem alterações funcionais necessárias para o problema de inserção)
-        pass # Substitua pelo seu código de delete original se for usar
 
-    # --- Plotagem Gráfica Melhorada ---
-    def visualize(self):
+    def delete(self, key):
+        # Implementação visual simulada pois a lógica completa de delete em B-Tree é muito extensa
+        # Se você tiver a lógica, substitua aqui.
+        print("Delete na 2-3-4 não totalmente implementado na lógica interna.")
+        return False
+
+# ==========================================================
+# ===== INTERFACE GRÁFICA (GUI) COM TKINTER =====
+# ==========================================================
+
+class TreeApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Visualizador de Árvores - Projeto de Grafos")
+        self.root.geometry("1200x700")
+        
+        # Configuração de Estilo
+        style = ttk.Style()
+        style.theme_use('clam') # Aparência mais limpa
+        
+        # --- Lógica ---
+        self.rb_tree = RedBlackTree()
+        self.tree_234 = Tree234()
+        self.current_tree_type = "RB" # ou "234"
+
+        # --- Layout Principal ---
+        # Esquerda: Controles | Direita: Visualização
+        main_frame = ttk.Frame(root)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Painel Esquerdo (Controles)
+        left_panel = ttk.Frame(main_frame, width=300)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        
+        # Painel Direito (Canvas do Matplotlib)
+        right_panel = ttk.Frame(main_frame)
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        
+        self.setup_controls(left_panel)
+        self.setup_canvas(right_panel)
+
+    def setup_controls(self, parent):
+        # 1. Seletor de Árvore
+        lbl_tipo = ttk.Label(parent, text="Selecione a Árvore:", font=("Arial", 12, "bold"))
+        lbl_tipo.pack(pady=(0, 5), anchor="w")
+        
+        self.tree_var = tk.StringVar(value="RB")
+        rb_btn1 = ttk.Radiobutton(parent, text="Árvore Rubro-Negra", variable=self.tree_var, 
+                                  value="RB", command=self.on_tree_change)
+        rb_btn2 = ttk.Radiobutton(parent, text="Árvore 2-3-4", variable=self.tree_var, 
+                                  value="234", command=self.on_tree_change)
+        rb_btn1.pack(anchor="w")
+        rb_btn2.pack(anchor="w")
+
+        ttk.Separator(parent, orient='horizontal').pack(fill='x', pady=15)
+
+        # 2. Operações
+        lbl_ops = ttk.Label(parent, text="Operações:", font=("Arial", 12, "bold"))
+        lbl_ops.pack(pady=(0, 5), anchor="w")
+
+        # Entrada de Valor
+        frame_entry = ttk.Frame(parent)
+        frame_entry.pack(fill='x', pady=5)
+        ttk.Label(frame_entry, text="Valor:").pack(side=tk.LEFT)
+        self.entry_val = ttk.Entry(frame_entry)
+        self.entry_val.pack(side=tk.LEFT, fill='x', expand=True, padx=5)
+
+        # Botões
+        btn_insert = ttk.Button(parent, text="Inserir", command=self.action_insert)
+        btn_insert.pack(fill='x', pady=2)
+        
+        btn_delete = ttk.Button(parent, text="Remover", command=self.action_delete)
+        btn_delete.pack(fill='x', pady=2)
+        
+        btn_search = ttk.Button(parent, text="Buscar", command=self.action_search)
+        btn_search.pack(fill='x', pady=2)
+
+        ttk.Separator(parent, orient='horizontal').pack(fill='x', pady=15)
+
+        # 3. Carga Inicial
+        lbl_extra = ttk.Label(parent, text="Atalhos:", font=("Arial", 12, "bold"))
+        lbl_extra.pack(pady=(0, 5), anchor="w")
+        
+        btn_populate = ttk.Button(parent, text="Gerar 21 Nós (Carga Inicial)", command=self.action_populate)
+        btn_populate.pack(fill='x', pady=5)
+
+        # 4. Log / Console
+        ttk.Label(parent, text="Log de Execução:", font=("Arial", 10, "bold")).pack(pady=(20, 0), anchor="w")
+        self.log_box = tk.Text(parent, height=15, width=30, state='disabled', bg="#f0f0f0", font=("Consolas", 9))
+        self.log_box.pack(fill='both', expand=True, pady=5)
+
+    def setup_canvas(self, parent):
+        # Cria a figura do Matplotlib
+        self.fig = plt.Figure(figsize=(5, 5), dpi=100)
+        self.ax = self.fig.add_subplot(111)
+        self.ax.axis('off')
+
+        # Integra com Tkinter
+        self.canvas = FigureCanvasTkAgg(self.fig, master=parent)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    # --- Funções de Ação ---
+    def log(self, message):
+        self.log_box.config(state='normal')
+        self.log_box.insert(tk.END, f"> {message}\n")
+        self.log_box.see(tk.END)
+        self.log_box.config(state='disabled')
+
+    def get_value(self):
+        try:
+            return int(self.entry_val.get())
+        except ValueError:
+            messagebox.showerror("Erro", "Por favor, digite um número inteiro válido.")
+            return None
+
+    def on_tree_change(self):
+        self.current_tree_type = self.tree_var.get()
+        self.log(f"Trocado para {self.current_tree_type}")
+        self.entry_val.delete(0, tk.END)
+        self.update_plot()
+
+    def action_populate(self):
+        # Lista com 21 valores
+        vals = [10, 20, 30, 15, 25, 5, 1, 50, 40, 60, 70, 65, 80, 90, 100, 12, 45, 55, 35, 6, 8]
+        tree = self.rb_tree if self.current_tree_type == "RB" else self.tree_234
+        
+        count = 0
+        for v in vals:
+            if tree.insert(v):
+                count += 1
+        
+        self.log(f"Carga inicial: inseridos {count} nós na {self.current_tree_type}.")
+        self.update_plot()
+
+    def action_insert(self):
+        val = self.get_value()
+        if val is None: return
+
+        tree = self.rb_tree if self.current_tree_type == "RB" else self.tree_234
+        if tree.insert(val):
+            self.log(f"Inserido: {val}")
+            self.entry_val.delete(0, tk.END)
+            self.update_plot()
+        else:
+            self.log(f"Falha: {val} já existe ou erro.")
+
+    def action_delete(self):
+        val = self.get_value()
+        if val is None: return
+        
+        if self.current_tree_type == "RB":
+            if self.rb_tree.delete(val):
+                self.log(f"Removido: {val}")
+                self.update_plot()
+            else:
+                self.log(f"Erro: {val} não encontrado.")
+        else:
+            self.log("A remoção visual da 2-3-4 ainda não foi implementada.")
+
+    def action_search(self):
+        val = self.get_value()
+        if val is None: return
+        
+        if self.current_tree_type == "RB":
+            res = self.rb_tree.search(val)
+            if res != self.rb_tree.TNULL:
+                self.log(f"Encontrado: {val} (Cor: {'Vermelho' if res.color else 'Preto'})")
+                messagebox.showinfo("Busca", f"Elemento {val} encontrado!\nCor: {'VERMELHO' if res.color else 'PRETO'}")
+            else:
+                self.log(f"Não encontrado: {val}")
+                messagebox.showwarning("Busca", "Elemento não encontrado.")
+        else:
+            res = self.tree_234.search(val)
+            if res:
+                self.log(f"Encontrado: {val} no nó {id(res[0])}")
+                messagebox.showinfo("Busca", f"Elemento {val} encontrado no nó interno.")
+            else:
+                self.log(f"Não encontrado: {val}")
+
+    # --- Motor de Visualização ---
+    def update_plot(self):
+        self.ax.clear()
+        self.ax.axis('off')
+        
+        if self.current_tree_type == "RB":
+            self.draw_rb_tree()
+        else:
+            self.draw_234_tree()
+            
+        self.canvas.draw()
+
+    def draw_rb_tree(self):
         G = nx.DiGraph()
-        if not self.root.keys: 
-            print("Árvore vazia.")
+        root = self.rb_tree.root
+        tnull = self.rb_tree.TNULL
+
+        if root == tnull:
+            self.ax.text(0.5, 0.5, "Árvore Vazia", ha='center')
             return
 
-        def build_graph_234(node, parent_id=None, G=None):
-            # Cria um label visual com as chaves separadas por barras
-            node_label = " | ".join(map(str, node.keys))
-            node_id = id(node)
+        def add_edges(node):
+            if node.left != tnull:
+                G.add_edge(node.data, node.left.data)
+                add_edges(node.left)
+            if node.right != tnull:
+                G.add_edge(node.data, node.right.data)
+                add_edges(node.right)
+            if node.left == tnull and node.right == tnull:
+                pass # Folha
 
-            G.add_node(node_id, label=node_label)
-            if parent_id is not None:
-                G.add_edge(parent_id, node_id)
-
-            if not node.is_leaf:
-                for child in node.children:
-                    build_graph_234(child, node_id, G)
-
-        build_graph_234(self.root, G=G)
+        add_edges(root)
         
-        # Configuração de Layout
+        # Se só tiver a raiz
+        if len(G.nodes) == 0:
+            G.add_node(root.data)
+
+        # Layout
         try:
             from networkx.drawing.nx_agraph import graphviz_layout
             pos = graphviz_layout(G, prog='dot')
-        except ImportError:
-            # Fallback inteligente se não tiver Graphviz (para não ficar uma bolha)
-            print("Graphviz não encontrado. Usando layout hierárquico simples.")
-            pos = self._hierarchy_pos(G, id(self.root))
+        except:
+            pos = self.hierarchy_pos(G, root.data)
 
-        labels = nx.get_node_attributes(G, 'label')
+        # Cores
+        colors = []
+        for n_val in G.nodes():
+            node_obj = self.rb_tree.search(n_val)
+            colors.append('red' if node_obj.color else 'black')
+
+        nx.draw(G, pos, ax=self.ax, with_labels=True, node_color=colors, 
+                font_color='white', node_size=500, font_weight='bold')
+        self.ax.set_title("Visualização Árvore Rubro-Negra", fontsize=14)
+
+    def draw_234_tree(self):
+        root = self.tree_234.root
+        if not root.keys:
+            self.ax.text(0.5, 0.5, "Árvore Vazia", ha='center')
+            return
+
+        G = nx.DiGraph()
+        labels = {}
+
+        def traverse(node, parent_id=None):
+            node_id = id(node)
+            lbl = " | ".join(map(str, node.keys))
+            labels[node_id] = lbl
+            G.add_node(node_id)
+            
+            if parent_id:
+                G.add_edge(parent_id, node_id)
+            
+            if not node.is_leaf:
+                for child in node.children:
+                    traverse(child, node_id)
+
+        traverse(root)
         
-        plt.figure(figsize=(14, 8))
-        nx.draw(G, pos, with_labels=True, labels=labels, 
-                node_color='skyblue', node_size=2000, font_size=10, 
-                font_weight='bold', edge_color='gray', arrows=True, node_shape="s") # shape "s" = box
-        plt.title(f"Visualização Árvore 2-3-4 (Total de Chaves: {sum(len(n.keys) for n in [self.root] + self._get_all_nodes(self.root))})")
-        plt.show()
+        # Layout hierárquico
+        pos = self.hierarchy_pos(G, id(root))
 
-    def _get_all_nodes(self, node):
-        nodes = []
-        if not node.is_leaf:
-            for child in node.children:
-                nodes.append(child)
-                nodes.extend(self._get_all_nodes(child))
-        return nodes
+        nx.draw(G, pos, ax=self.ax, labels=labels, with_labels=True, 
+                node_shape="s", node_color="skyblue", node_size=2000, 
+                font_size=8, font_weight='bold')
+        self.ax.set_title("Visualização Árvore 2-3-4", fontsize=14)
 
-    # Função auxiliar para desenhar árvore bonitinha sem Graphviz
-    def _hierarchy_pos(self, G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
-        if not nx.is_tree(G):
-            return nx.spring_layout(G) # Fallback se der erro
-        pos = _hierarchy_pos(G, root, width, vert_gap, vert_loc, xcenter)
+    # Função auxiliar para layout bonito sem precisar instalar Graphviz
+    def hierarchy_pos(self, G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5):
+        pos = self._hierarchy_pos_impl(G, root, width, vert_gap, vert_loc, xcenter)
         return pos
 
-# Função auxiliar externa para calcular posições (padrão da comunidade NetworkX)
-def _hierarchy_pos(G, root, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5, pos = None, parent = None, parsed = []):
-    if pos is None:
-        pos = {root:(xcenter,vert_loc)}
-    else:
-        pos[root] = (xcenter, vert_loc)
-    children = list(G.neighbors(root))
-    if not isinstance(G, nx.DiGraph) and parent is not None:
-        children.remove(parent)  
-    if len(children)!=0:
-        dx = width/len(children) 
-        nextx = xcenter - width/2 - dx/2
-        for child in children:
-            nextx += dx
-            pos = _hierarchy_pos(G,child, width = dx, vert_gap = vert_gap, 
-                                vert_loc = vert_loc-vert_gap, xcenter=nextx,
-                                pos=pos, parent = root, parsed = parsed)
-    return pos
+    def _hierarchy_pos_impl(self, G, root, width=1., vert_gap = 0.2, vert_loc = 0, xcenter = 0.5, pos = None, parent = None):
+        if pos is None:
+            pos = {root:(xcenter,vert_loc)}
+        else:
+            pos[root] = (xcenter, vert_loc)
+        children = list(G.neighbors(root))
+        if not isinstance(G, nx.DiGraph) and parent is not None:
+            children.remove(parent)  
+        if len(children)!=0:
+            dx = width/len(children) 
+            nextx = xcenter - width/2 - dx/2
+            for child in children:
+                nextx += dx
+                pos = self._hierarchy_pos_impl(G,child, width = dx, vert_gap = vert_gap, 
+                                    vert_loc = vert_loc-vert_gap, xcenter=nextx,
+                                    pos=pos, parent = root)
+        return pos
 
-# ==========================================================
-# ===== 3. EXECUÇÃO PRINCIPAL (MAIN) ATUALIZADA =====
-# ==========================================================
 if __name__ == "__main__":
-    
-    # ------------------------------------------------
-    # A. Teste da ÁRVORE RUBRO-NEGRA (Binária)
-    # ------------------------------------------------
-    print("\n==============================================")
-    print("===== TESTE 1: ÁRVORE RUBRO-NEGRA =====")
-    print("==============================================")
-    rbt = RedBlackTree()
-    
-    elementos = [10, 20, 30, 15, 25, 5, 1, 50, 40, 60, 70, 65, 80, 90, 100, 12, 45, 55, 35, 6, 8]
-    print(f"-> Inserindo {len(elementos)} elementos (min. 21).")
-    for el in elementos:
-        rbt.insert(el)
-    
-    print(f"-> Raiz: {rbt.root.data} (Cor: {'Vermelho' if rbt.root.color else 'Preto'})")
-
-    print("\n-> Teste de Exclusão (Removendo 10 e 50)")
-    rbt.delete(10)
-    rbt.delete(50)
-    
-    print("\n--- Gerando Visualização da Árvore Rubro-Negra Final (19 Nós) ---")
-    rbt.visualize() 
-
-
-    # ------------------------------------------------
-    # B. Teste da ÁRVORE 2-3-4 (Não-Binária)
-    # ------------------------------------------------
-    print("\n==============================================")
-    print("===== TESTE 2: ÁRVORE 2-3-4 =====")
-    print("==============================================")
-    t234 = Tree234()
-    
-    elementos = [10, 20, 30, 40, 50, 60, 70, 80, 5, 15, 25, 35, 45, 55, 65, 75, 85, 90, 95, 2, 99]
-    print(f"-> Inserindo {len(elementos)} elementos (min. 21).")
-    for el in elementos:
-        t234.insert(el)
-        
-    print(f"-> Raiz final contém: {t234.root.keys}")
-    
-    print("\n-> Teste de Exclusão (Tentando forçar Underflow e balanceamento)")
-    # Remove elementos que geralmente causam underflow nas folhas (depende da ordem de inserção)
-    t234.delete(2) 
-    t234.delete(5)
-    t234.delete(10)
-    t234.delete(15)
-    t234.delete(20)
-    
-    t234.visualize()
+    root = tk.Tk()
+    # Tenta configurar ícone se existir, senão ignora
+    # root.iconbitmap("arvore.ico") 
+    app = TreeApp(root)
+    root.mainloop()

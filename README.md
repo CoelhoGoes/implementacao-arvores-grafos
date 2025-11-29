@@ -228,7 +228,7 @@ implementacao-arvores-grafos/
 
 ## 📝 Licença
 
-Este projeto foi desenvolvido para fins educacionais como parte da disciplina de Algoritmos e Estruturas de Dados.
+Este projeto foi desenvolvido para fins educacionais como parte da disciplina de Teoria de Grafos.
 
 ---
 
